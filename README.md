@@ -32,11 +32,11 @@ This library integrates Google Calendar functionalities into Xircuits, enabling 
 
 ### Create Event Example
 
-<img src="https://github.com/user-attachments/assets/placeholder_create_event" alt="Create Event Example" />
+<img src="https://github.com/user-attachments/assets/53dab733-2c16-4f0e-9120-5cc95a12242d" alt="Create Event Example" />
 
 ### Check Event Example
 
-<img src="https://github.com/user-attachments/assets/placeholder_check_event" alt="Check Event Example" />
+<img src="https://github.com/user-attachments/assets/102c0115-c43d-4942-9bdd-692bf0b4221d" alt="Check Event Example" />
 
 ## Prerequisites
 
@@ -52,17 +52,17 @@ Before you begin, ensure you have:
 ### AuthenticateGoogleCalendar Component
 Authenticates with Google Calendar using a service account JSON file, with an optional user impersonation feature.
 
-<img src="https://github.com/user-attachments/assets/placeholder_authenticate" alt="AuthenticateGoogleCalendar" width="200" height="100" />
+<img src="https://github.com/user-attachments/assets/f6fe1646-962e-4ca4-9a05-15b1aced485f" alt="AuthenticateGoogleCalendar" width="200" height="100" />
 
 ### GetGoogleCalendarEvents Component
 Retrieves events from a specified Google Calendar within a given time range.
 
-<img src="https://github.com/user-attachments/assets/placeholder_get_events" alt="GetGoogleCalendarEvents" width="200" height="100" />
+<img src="https://github.com/user-attachments/assets/3b0aba09-9a8c-450e-8888-0bc955a53618" alt="GetGoogleCalendarEvents" width="200" height="100" />
 
 ### CreateGoogleCalendarEvent Component
 Creates a new event in a Google Calendar with detailed inputs for summary, description, start/end times, location, and participants. It sends email notifications to all attendees.
 
-<img src="https://github.com/user-attachments/assets/placeholder_create_event" alt="CreateGoogleCalendarEvent" width="200" height="100" />
+<img src="https://github.com/user-attachments/assets/746ced5a-7465-4c97-a0f7-58b3130d6d16" alt="CreateGoogleCalendarEvent" width="200" height="200" />
 
 ### ModifyGoogleCalendarEvent Component
 Modifies an existing event by updating only the provided fields (summary, description, start/end times, location, participants) and sends email notifications.
@@ -121,12 +121,13 @@ pip install -r xai_components/xai_gcalendar/requirements.txt
 ### Service Account Credentials
 - Create a Google Cloud project and enable the Google Calendar API.
 - Create a service account in the Google Cloud Console.
+- Add this scope to your service account `https://www.googleapis.com/auth/calendar`
 - Download the service account JSON file.
 - Share your Google Calendar with the service account email if needed.
 - Provide the path to the JSON file in the `AuthenticateGoogleCalendar` component.
 
 ### User Impersonation (Optional)
-If you need to access calendar data on behalf of a user, supply the user's email in the `impersonate_user_account` input of the `AuthenticateGoogleCalendar` component.
+If you need to access calendar data on behalf of a user, supply the user's email in the `impersonate_user_account` input of the `AuthenticateGoogleCalendar` component. Please note that you will need to enable Domin-wide Delegation for your service account to be able to use this feature. 
 
 For more details on using Xircuits components and project templates, visit [Xircuits Docs](https://xircuits.io/docs) and join our [Discord Community](https://discord.com/invite/vgEg2ZtxCw).
 
