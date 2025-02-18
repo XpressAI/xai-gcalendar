@@ -13,31 +13,35 @@ class AuthenticateGoogleCalendar(Component):
     ## Inputs
     - `service_account_json` (str): Path to the service account JSON file. If not provided or invalid,
       the component will attempt to read credentials from the `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` environment variable.
+    - `impersonate_user_account` (str, optional): The email address of the user to impersonate. If provided,
+      the service account credentials will delegate access to this user account.
 
     ## Outputs
     - Adds `service` (the authenticated Google Calendar service object) to the context for further use by other components.
     """
     service_account_json: InArg[str]
+    impersonate_user_account: InArg[str]
 
     def execute(self, ctx) -> None:
         SCOPES = ['https://www.googleapis.com/auth/calendar']
         SERVICE_ACCOUNT_FILE = self.service_account_json.value
         if SERVICE_ACCOUNT_FILE and os.path.exists(SERVICE_ACCOUNT_FILE):
             print(f"Using provided service account JSON: {SERVICE_ACCOUNT_FILE}")
-            credentials = service_account.Credentials.from_service_account_file(
-                SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-            delegated_credentials = credentials.with_subject('mansour@xpress.ai')
-
-            service = build('calendar', 'v3', credentials=delegated_credentials)
+            credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
         else:
             encoded_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_CREDENTIALS")
             if not encoded_json:
                 raise ValueError("Neither a valid file path nor GOOGLE_SERVICE_ACCOUNT_CREDENTIALS environment variable was found.")
             
             gcal_creds = json.loads(base64.b64decode(encoded_json).decode())
-            credentials = service_account.Credentials.from_service_account_info(credentials, scopes=SCOPES)
+            credentials = service_account.Credentials.from_service_account_info(gcal_creds, scopes=SCOPES)
+            
+        if self.impersonate_user_account.value is not None:
+            delegated_credentials = credentials.with_subject(self.impersonate_user_account.value)
+            service = build('calendar', 'v3', credentials=delegated_credentials)
+        else:
             service = build('calendar', 'v3', credentials=credentials)
-
+            
         ctx.update({'service': service})
         print("Google Calendar authentication completed successfully.")
 
@@ -62,35 +66,34 @@ class GetGoogleCalendarEvents(Component):
     events: OutArg[dict]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            events_result = service.events().list(
-                calendarId=self.calendar_id.value,
-                timeMin=self.start_time.value,
-                timeMax=self.end_time.value,
-                singleEvents=True
-            ).execute()
 
-            events = events_result.get('items', [])
-            if not events:
-                self.events.value = {"message": "No events found for the specified time range."}
-            else:
-                events_list = []
-                for event in events:
-                    event_details = {
-                        "event_name": event.get('summary', 'No Title'),
-                        "start_time": event['start'].get('dateTime', event['start'].get('date')),
-                        "end_time": event['end'].get('dateTime', event['end'].get('date')),
-                        "location": event.get('location', ''),
-                        "participants": [participant['email'] for participant in event.get('attendees', [])],
-                        "gmeet_link": event.get('hangoutLink', ''),
-                        "meeting_id": self.extract_meeting_id(event.get('hangoutLink', ''))
-                    }
-                    events_list.append(event_details)
+        service = ctx["service"]
+        events_result = service.events().list(
+            calendarId=self.calendar_id.value,
+            timeMin=self.start_time.value,
+            timeMax=self.end_time.value,
+            singleEvents=True
+        ).execute()
 
-                self.events.value = {"events": events_list}
-        except Exception as e:
-            self.events.value = {"error": str(e)}
+        events = events_result.get('items', [])
+        if not events:
+            self.events.value = {"message": "No events found for the specified time range."}
+        else:
+            events_list = []
+            for event in events:
+                event_details = {
+                    "event_name": event.get('summary', 'No Title'),
+                    "start_time": event['start'].get('dateTime', event['start'].get('date')),
+                    "end_time": event['end'].get('dateTime', event['end'].get('date')),
+                    "location": event.get('location', ''),
+                    "participants": [participant['email'] for participant in event.get('attendees', [])],
+                    "gmeet_link": event.get('hangoutLink', ''),
+                    "meeting_id": self.extract_meeting_id(event.get('hangoutLink', ''))
+                }
+                events_list.append(event_details)
+
+            self.events.value = {"events": events_list}
+
 
     @staticmethod
     def extract_meeting_id(meet_url):
@@ -127,30 +130,29 @@ class CreateGoogleCalendarEvent(Component):
     event_id: OutArg[str]
 
     def execute(self, ctx) -> None:
-        try:
-            CALENDAR_ID = self.calendar_id.value
-            service = ctx["service"]
+    
+        CALENDAR_ID = self.calendar_id.value
+        service = ctx["service"]
 
-            event = {
-                'summary': self.summary.value,
-                'start': {'dateTime': self.start_time.value, 'timeZone': 'UTC'},
-                'end': {'dateTime': self.end_time.value, 'timeZone': 'UTC'}
-            }
+        event = {
+            'summary': self.summary.value,
+            'start': {'dateTime': self.start_time.value, 'timeZone': 'UTC'},
+            'end': {'dateTime': self.end_time.value, 'timeZone': 'UTC'}
+        }
 
-            if self.description.value:
-                event['description'] = self.description.value
+        if self.description.value:
+            event['description'] = self.description.value
 
-            if self.location.value:
-                event['location'] = self.location.value
+        if self.location.value:
+            event['location'] = self.location.value
 
-            if self.participants.value:
-                attendees = [{'email': participant} for participant in self.participants.value]
-                event['attendees'] = attendees
+        if self.participants.value:
+            attendees = [{'email': participant} for participant in self.participants.value]
+            event['attendees'] = attendees
 
-            created_event = service.events().insert(calendarId=CALENDAR_ID, body=event, sendUpdates='all').execute()
-            self.event_id.value = created_event['id']
-        except Exception as e:
-            self.event_id.value = {"error": str(e)}
+        created_event = service.events().insert(calendarId=CALENDAR_ID, body=event, sendUpdates='all').execute()
+        self.event_id.value = created_event['id']
+
 
 
 @xai_component()
@@ -185,34 +187,33 @@ class ModifyGoogleCalendarEvent(Component):
     modified_event_id: OutArg[str]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            cal_id = self.calendar_id.value if self.calendar_id.value else "primary"
-            event = service.events().get(calendarId=cal_id, eventId=self.event_id.value).execute()
+        
+        service = ctx["service"]
+        cal_id = self.calendar_id.value if self.calendar_id.value else "primary"
+        event = service.events().get(calendarId=cal_id, eventId=self.event_id.value).execute()
 
-            # Update only if a new value is provided
-            if self.new_summary.value:
-                event['summary'] = self.new_summary.value
+        # Update only if a new value is provided
+        if self.new_summary.value:
+            event['summary'] = self.new_summary.value
 
-            if self.new_description.value:
-                event['description'] = self.new_description.value
+        if self.new_description.value:
+            event['description'] = self.new_description.value
 
-            if self.new_start_time.value:
-                event['start'] = {'dateTime': self.new_start_time.value, 'timeZone': 'UTC'}
+        if self.new_start_time.value:
+            event['start'] = {'dateTime': self.new_start_time.value, 'timeZone': 'UTC'}
 
-            if self.new_end_time.value:
-                event['end'] = {'dateTime': self.new_end_time.value, 'timeZone': 'UTC'}
+        if self.new_end_time.value:
+            event['end'] = {'dateTime': self.new_end_time.value, 'timeZone': 'UTC'}
 
-            if self.new_location.value:
-                event['location'] = self.new_location.value
+        if self.new_location.value:
+            event['location'] = self.new_location.value
 
-            if self.new_participants.value:
-                event['attendees'] = [{'email': participant} for participant in self.new_participants.value]
+        if self.new_participants.value:
+            event['attendees'] = [{'email': participant} for participant in self.new_participants.value]
 
-            updated_event = service.events().update(calendarId=cal_id, eventId=self.event_id.value, body=event, sendUpdates='all').execute()
-            self.modified_event_id.value = updated_event['id']
-        except Exception as e:
-            self.modified_event_id.value = {"error": str(e)}
+        updated_event = service.events().update(calendarId=cal_id, eventId=self.event_id.value, body=event, sendUpdates='all').execute()
+        self.modified_event_id.value = updated_event['id']
+
 
 
 
@@ -233,14 +234,12 @@ class DeleteGoogleCalendarEvent(Component):
     deletion_status: OutArg[str]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            cal_id = self.calendar_id.value if self.calendar_id.value else "primary"
 
-            service.events().delete(calendarId=cal_id, eventId=self.event_id.value).execute()
-            self.deletion_status.value = {"status": "Event deleted successfully."}
-        except Exception as e:
-            self.deletion_status.value = {"error": str(e)}
+        service = ctx["service"]
+        cal_id = self.calendar_id.value if self.calendar_id.value else "primary"
+
+        service.events().delete(calendarId=cal_id, eventId=self.event_id.value).execute()
+        self.deletion_status.value = {"status": "Event deleted successfully."}
 
 
 @xai_component()
@@ -257,12 +256,11 @@ class ListGoogleCalendars(Component):
     calendars: OutArg[dict]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            calendar_list = service.calendarList().list().execute()
-            self.calendars.value = calendar_list
-        except Exception as e:
-            self.calendars.value = {"error": str(e)}
+
+        service = ctx["service"]
+        calendar_list = service.calendarList().list().execute()
+        self.calendars.value = calendar_list
+
 
 
 @xai_component()
@@ -283,12 +281,11 @@ class GetCalendarDetails(Component):
     details: OutArg[dict]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            calendar_details = service.calendars().get(calendarId=self.calendar_id.value).execute()
-            self.details.value = calendar_details
-        except Exception as e:
-            self.details.value = {"error": str(e)}
+
+        service = ctx["service"]
+        calendar_details = service.calendars().get(calendarId=self.calendar_id.value).execute()
+        self.details.value = calendar_details
+
 
 
 @xai_component()
@@ -316,12 +313,11 @@ class QuickAddGoogleCalendarEvent(Component):
     event_id: OutArg[str]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            result = service.events().quickAdd(calendarId=self.calendar_id.value, text=self.query.value).execute()
-            self.event_id.value = result.get('id', '')
-        except Exception as e:
-            self.event_id.value = {"error": str(e)}
+
+        service = ctx["service"]
+        result = service.events().quickAdd(calendarId=self.calendar_id.value, text=self.query.value).execute()
+        self.event_id.value = result.get('id', '')
+
 
 
 
@@ -349,18 +345,17 @@ class SearchGoogleCalendarEvents(Component):
     events: OutArg[dict]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            result = service.events().list(
-                calendarId=self.calendar_id.value,
-                q=self.query.value,
-                timeMin=self.time_min.value,
-                timeMax=self.time_max.value,
-                singleEvents=True
-            ).execute()
-            self.events.value = result
-        except Exception as e:
-            self.events.value = {"error": str(e)}
+
+        service = ctx["service"]
+        result = service.events().list(
+            calendarId=self.calendar_id.value,
+            q=self.query.value,
+            timeMin=self.time_min.value,
+            timeMax=self.time_max.value,
+            singleEvents=True
+        ).execute()
+        self.events.value = result
+
 
 
 @xai_component()
@@ -385,16 +380,15 @@ class MoveGoogleCalendarEvent(Component):
     moved_event: OutArg[dict]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            result = service.events().move(
-                calendarId=self.source_calendar_id.value,
-                eventId=self.event_id.value,
-                destination=self.destination_calendar_id.value
-            ).execute()
-            self.moved_event.value = result
-        except Exception as e:
-            self.moved_event.value = {"error": str(e)}
+
+        service = ctx["service"]
+        result = service.events().move(
+            calendarId=self.source_calendar_id.value,
+            eventId=self.event_id.value,
+            destination=self.destination_calendar_id.value
+        ).execute()
+        self.moved_event.value = result
+
 
 
 @xai_component()
@@ -419,16 +413,15 @@ class UpdateGoogleCalendarEventAttendees(Component):
     updated_event_id: OutArg[str]
 
     def execute(self, ctx) -> None:
-        try:
-            service = ctx["service"]
-            cal_id = self.calendar_id.value if self.calendar_id.value else "primary"
-            event = service.events().get(calendarId=cal_id, eventId=self.event_id.value).execute()
-            # Update the attendees list
-            event['attendees'] = [{'email': email} for email in self.attendees.value]
-            updated_event = service.events().update(calendarId=cal_id, eventId=self.event_id.value, body=event).execute()
-            self.updated_event_id.value = updated_event.get('id', '')
-        except Exception as e:
-            self.updated_event_id.value = {"error": str(e)}
+
+        service = ctx["service"]
+        cal_id = self.calendar_id.value if self.calendar_id.value else "primary"
+        event = service.events().get(calendarId=cal_id, eventId=self.event_id.value).execute()
+        # Update the attendees list
+        event['attendees'] = [{'email': email} for email in self.attendees.value]
+        updated_event = service.events().update(calendarId=cal_id, eventId=self.event_id.value, body=event).execute()
+        self.updated_event_id.value = updated_event.get('id', '')
+
 
 @xai_component()
 class ExtractEventFromJsonString(Component):
@@ -453,12 +446,11 @@ class ExtractEventFromJsonString(Component):
     participants: OutArg[list]
 
     def execute(self, ctx) -> None:
-        try:
-            data = json.loads(self.json.value)
-            self.summary.value = data['summary']
-            self.start_time.value = data['start_time']
-            self.end_time.value = data['end_time']
-            self.location.value = data.get('location', '')
-            self.participants.value = data.get('participants', [])
-        except Exception as e:
-            self.summary.value = {"error": str(e)}
+
+        data = json.loads(self.json.value)
+        self.summary.value = data['summary']
+        self.start_time.value = data['start_time']
+        self.end_time.value = data['end_time']
+        self.location.value = data.get('location', '')
+        self.participants.value = data.get('participants', [])
+
