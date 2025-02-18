@@ -7,7 +7,16 @@ import os
 
 @xai_component()
 class AuthenticateGoogleCalendar(Component):
-    """Handles authentication for Google Calendar API."""
+    """
+    A component that handles authentication for the Google Calendar API.
+
+    ## Inputs
+    - `service_account_json` (str): Path to the service account JSON file. If not provided or invalid,
+      the component will attempt to read credentials from the `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` environment variable.
+
+    ## Outputs
+    - Adds `service` (the authenticated Google Calendar service object) to the context for further use by other components.
+    """
     service_account_json: InArg[str]
 
     def execute(self, ctx) -> None:
@@ -33,7 +42,17 @@ class AuthenticateGoogleCalendar(Component):
 
 @xai_component()
 class GetGoogleCalendarEvents(Component):
-    """Component to fetch and structure Google Calendar events."""
+    """
+    A component that fetches and structures events from a specified Google Calendar for a given day.
+
+    ## Inputs
+    - `calendar_id` (str): The ID of the Google Calendar.
+    - `date` (str): The date (in YYYY-MM-DD format) for which to retrieve events.
+
+    ## Outputs
+    - `events` (dict): A dictionary containing a list of events under the key "events",
+      or a message if no events are found.
+    """
     calendar_id: InArg[str]
     date: InArg[str]
     events: OutArg[dict]
@@ -79,7 +98,20 @@ class GetGoogleCalendarEvents(Component):
 
 @xai_component()
 class CreateGoogleCalendarEvent(Component):
-    """A component that creates a new event in Google Calendar."""
+    """
+    A component that creates a new event in a Google Calendar.
+
+    ## Inputs
+    - `calendar_id` (str): The ID of the Google Calendar where the event will be created.
+    - `summary` (str): The event summary or title (compulsory).
+    - `start_time` (str): The start time of the event in ISO format (compulsory).
+    - `end_time` (str): The end time of the event in ISO format (compulsory).
+    - `location` (str, optional): The location of the event.
+    - `participants` (list, optional): A list of participant email addresses.
+
+    ## Outputs
+    - `event_id` (str): The ID of the created event.
+    """
     calendar_id: InArg[str]
     summary: InCompArg[str]
     start_time: InCompArg[str]
@@ -114,7 +146,18 @@ class CreateGoogleCalendarEvent(Component):
 
 @xai_component()
 class ModifyGoogleCalendarEvent(Component):
-    """A component that modifies a Google Calendar event."""
+    """
+    A component that modifies an existing event in Google Calendar.
+
+    ## Inputs
+    - `event_id` (str): The ID of the event to be modified.
+    - `new_summary` (str): The new summary or title for the event.
+    - `new_description` (str): The new description for the event.
+    - `calendar_id` (str, optional): The ID of the calendar where the event resides. Defaults to "primary" if not provided.
+
+    ## Outputs
+    - `modified_event_id` (str): The ID of the modified event.
+    """
     event_id: InArg[str]
     new_summary: InArg[str]
     new_description: InArg[str]
@@ -138,7 +181,16 @@ class ModifyGoogleCalendarEvent(Component):
 
 @xai_component()
 class DeleteGoogleCalendarEvent(Component):
-    """A component that deletes a Google Calendar event."""
+    """
+    A component that deletes an event from a Google Calendar.
+
+    ## Inputs
+    - `event_id` (str): The ID of the event to be deleted.
+    - `calendar_id` (str, optional): The ID of the calendar from which the event will be deleted. Defaults to "primary" if not provided.
+
+    ## Outputs
+    - `deletion_status` (str): A status message indicating whether the event was successfully deleted or an error occurred.
+    """
     event_id: InArg[str]
     calendar_id: InArg[str]  # Optional: defaults to "primary" if not provided.
     deletion_status: OutArg[str]
@@ -156,7 +208,19 @@ class DeleteGoogleCalendarEvent(Component):
 
 @xai_component()
 class ExtractEventFromJsonString(Component):
-    """Extracts event details from a JSON string."""
+    """
+    A component that extracts event details from a JSON string.
+
+    ## Inputs
+    - `json` (str): A JSON string containing event details.
+
+    ## Outputs
+    - `summary` (str): The event summary or title.
+    - `start_time` (str): The event start time.
+    - `end_time` (str): The event end time.
+    - `location` (str): The event location.
+    - `participants` (list): A list of participant email addresses.
+    """
     json: InCompArg[str]
     summary: OutArg[str]
     start_time: OutArg[str]
